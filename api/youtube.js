@@ -172,3 +172,14 @@ async function fetchLatestFromYT() {
             .map(item => ({ id: { videoId: item.id }, snippet: item.snippet, isLive: false }))
     }
 }
+
+async function fetchPlaylistItemsFromYT(playlistId, maxResults = 10) {
+    const response = await youtubeApi.get('/playlistItems', {
+        params: {
+            playlistId,
+            part: 'snippet,contentDetails',
+            maxResults
+        }
+    })
+    return response.data.items || []
+}

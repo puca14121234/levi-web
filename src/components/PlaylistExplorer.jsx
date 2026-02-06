@@ -37,7 +37,6 @@ const PlaylistExplorer = () => {
 
     useEffect(() => {
         if (!activeTab) return;
-        const { getPlaylistVideos } = require('../services/youtubeService'); // Use commonjs or top level import
 
         const fetchVideos = async () => {
             setLoadingVideos(true);

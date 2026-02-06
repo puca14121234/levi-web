@@ -34,7 +34,7 @@ export default async function handler(req, res) {
 
     try {
         // 1. Kiểm tra Cache trong Redis
-        const cacheKey = `yt_data_${type || 'all'}`
+        const cacheKey = `yt_data_${type || 'all'}_v2`
         const cachedData = await redis.get(cacheKey)
 
         if (cachedData) {
@@ -144,32 +144,58 @@ async function fetchLatestFromYT() {
         params: {
             channelId: CHANNEL_ID,
             part: 'snippet,contentDetails',
-            maxResults: 20
+            maxResults: 50
         }
     })
 
     const uploads = response.data.items.filter(item => item.snippet.type === 'upload')
-    if (uploads.length === 0) return { videos: [], livestreams: [] }
+    if (uploads.length === 0) return { videos: [], livestreams: [], shorts: [] }
 
     const videoIds = uploads.map(item => item.contentDetails.upload.videoId).join(',')
     const detailsResponse = await youtubeApi.get('/videos', {
         params: {
             id: videoIds,
-            part: 'snippet,liveStreamingDetails'
+            part: 'snippet,contentDetails,liveStreamingDetails'
         }
     })
 
     const allItems = detailsResponse.data.items
-    return {
-        // Chỉ lấy những video thực sự đang LIVE
-        livestreams: allItems
-            .filter(item => item.snippet.liveBroadcastContent === 'live')
-            .map(item => ({ id: { videoId: item.id }, snippet: item.snippet, isLive: true })),
 
-        // Videos thường (không bao gồm scheduled/upcoming streams)
-        videos: allItems
-            .filter(item => item.snippet.liveBroadcastContent !== 'live' && item.snippet.liveBroadcastContent !== 'upcoming')
-            .map(item => ({ id: { videoId: item.id }, snippet: item.snippet, isLive: false }))
+    const isShort = (duration) => {
+        const match = duration.match(/PT(\d+H)?(\d+M)?(\d+S)?/)
+        if (!match) return false
+        const hours = parseInt(match[1]) || 0
+        const minutes = parseInt(match[2]) || 0
+        const seconds = parseInt(match[3]) || 0
+        const totalSeconds = hours * 3600 + minutes * 60 + seconds
+        return totalSeconds > 0 && totalSeconds < 60
+    }
+
+    const livestreamsActive = allItems
+        .filter(i => i.snippet.liveBroadcastContent === 'live')
+        .map(i => ({ id: { videoId: i.id }, snippet: i.snippet, isLive: true }))
+
+    const livestreamsPast = allItems
+        .filter(i => i.snippet.liveBroadcastContent === 'none' && !!i.liveStreamingDetails)
+        .map(i => ({ id: { videoId: i.id }, snippet: i.snippet, isLive: false }))
+
+    const shorts = allItems
+        .filter(i => isShort(i.contentDetails.duration))
+        .map(i => ({ id: { videoId: i.id }, snippet: i.snippet, isShort: true }))
+
+    const videos = allItems
+        .filter(i => {
+            const isStream = i.snippet.liveBroadcastContent === 'live' || i.snippet.liveBroadcastContent === 'upcoming'
+            const hasBeenStreamed = !!i.liveStreamingDetails
+            const isShortVideo = isShort(i.contentDetails.duration)
+            return !isStream && !hasBeenStreamed && !isShortVideo
+        })
+        .map(i => ({ id: { videoId: i.id }, snippet: i.snippet, isLive: false }))
+
+    return {
+        livestreams: [...livestreamsActive, ...livestreamsPast].slice(0, 3),
+        videos: videos.slice(0, 12),
+        shorts: shorts.slice(0, 10)
     }
 }
 

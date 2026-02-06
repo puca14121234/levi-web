@@ -93,7 +93,7 @@ const fetchPlaylistsDirectly = async () => {
 };
 
 // --- PUBLIC EXPORTS ---
-export const getCategorizedLatestContent = async (maxResults = 10) => {
+export const getCategorizedLatestContent = async () => {
     return await smartFetch('/youtube', { type: 'latest' }, { videos: [], livestreams: [] });
 };
 
@@ -102,7 +102,7 @@ export const getLatestVideos = async (maxResults = 4) => {
     return videos;
 };
 
-export const getFeaturedVideos = async (_maxResults = 5) => {
+export const getFeaturedVideos = async () => {
     return await smartFetch('/youtube', { type: 'featured' }, MOCK_FEATURED);
 };
 

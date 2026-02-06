@@ -23,11 +23,11 @@ const Reveal = ({ children }) => (
 );
 
 function App() {
-  const [categorizedContent, setCategorizedContent] = useState({ videos: [], livestreams: [] });
+  const [categorizedContent, setCategorizedContent] = useState({ videos: [], livestreams: [], shorts: [] });
 
   useEffect(() => {
     const fetchData = async () => {
-      const data = await getCategorizedLatestContent(3);
+      const data = await getCategorizedLatestContent(); // Không cần slice(3) ở đây vì service đã giới hạn
       setCategorizedContent(data);
     };
     fetchData();
@@ -50,11 +50,21 @@ function App() {
           </Reveal>
         </section>
 
+        {/* Video Shorts */}
+        <Reveal>
+          <VideoRow
+            title="Video Shorts"
+            fetchFn={async () => categorizedContent.shorts.slice(0, 5)}
+            seeMoreUrl="https://www.youtube.com/@Levi97/shorts"
+            isShorts={true}
+          />
+        </Reveal>
+
         {/* Livestream mới nhất */}
         <Reveal>
           <VideoRow
             title="Livestream mới nhất"
-            fetchFn={async () => categorizedContent.livestreams.slice(0, 3)}
+            fetchFn={async () => categorizedContent.livestreams}
             seeMoreUrl="https://www.youtube.com/@Levi97/streams"
           />
         </Reveal>

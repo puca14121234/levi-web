@@ -75,15 +75,47 @@ const fetchFeaturedDirectly = async () => {
 };
 
 const fetchLatestDirectly = async () => {
-    const res = await directApi.get('/activities', { params: { channelId: CHANNEL_ID, part: 'snippet,contentDetails', maxResults: 20 } });
+    // Tăng maxResults để có đủ dữ liệu phân loại (Shorts, Video, Stream)
+    const res = await directApi.get('/activities', { params: { channelId: CHANNEL_ID, part: 'snippet,contentDetails', maxResults: 50 } });
     const uploads = res.data.items.filter(i => i.snippet.type === 'upload');
     const videoIds = uploads.map(i => i.contentDetails.upload.videoId).join(',');
-    const details = await directApi.get('/videos', { params: { id: videoIds, part: 'snippet,liveStreamingDetails' } });
+
+    // Fetch chi tiết video bao gồm cả contentDetails (thời lượng) và liveStreamingDetails
+    const details = await directApi.get('/videos', { params: { id: videoIds, part: 'snippet,contentDetails,liveStreamingDetails' } });
     const all = details.data.items;
 
+    // Helper kiểm tra video Shorts (thời lượng < 60 giây)
+    const isShort = (duration) => {
+        const match = duration.match(/PT(\d+H)?(\d+M)?(\d+S)?/);
+        if (!match) return false;
+        const hours = parseInt(match[1]) || 0;
+        const minutes = parseInt(match[2]) || 0;
+        const seconds = parseInt(match[3]) || 0;
+        const totalSeconds = hours * 3600 + minutes * 60 + seconds;
+        return totalSeconds > 0 && totalSeconds < 60;
+    };
+
+    const livestreams = all
+        .filter(i => i.snippet.liveBroadcastContent === 'live')
+        .map(i => ({ id: { videoId: i.id }, snippet: i.snippet, isLive: true }));
+
+    const shorts = all
+        .filter(i => isShort(i.contentDetails.duration))
+        .map(i => ({ id: { videoId: i.id }, snippet: i.snippet, isShort: true }));
+
+    const videos = all
+        .filter(i => {
+            const isStream = i.snippet.liveBroadcastContent === 'live' || i.snippet.liveBroadcastContent === 'upcoming';
+            const hasBeenStreamed = !!i.liveStreamingDetails; // Livestream đã kết thúc vẫn có details này
+            const isShortVideo = isShort(i.contentDetails.duration);
+            return !isStream && !hasBeenStreamed && !isShortVideo;
+        })
+        .map(i => ({ id: { videoId: i.id }, snippet: i.snippet, isLive: false }));
+
     return {
-        livestreams: all.filter(i => i.snippet.liveBroadcastContent === 'live').map(i => ({ id: { videoId: i.id }, snippet: i.snippet, isLive: true })),
-        videos: all.filter(i => i.snippet.liveBroadcastContent !== 'live' && i.snippet.liveBroadcastContent !== 'upcoming').map(i => ({ id: { videoId: i.id }, snippet: i.snippet, isLive: false }))
+        livestreams: livestreams.slice(0, 3), // Lấy tối đa 3 stream mới nhất
+        videos: videos.slice(0, 20),
+        shorts: shorts.slice(0, 10)
     };
 };
 
@@ -94,7 +126,7 @@ const fetchPlaylistsDirectly = async () => {
 
 // --- PUBLIC EXPORTS ---
 export const getCategorizedLatestContent = async () => {
-    return await smartFetch('/youtube', { type: 'latest' }, { videos: [], livestreams: [] });
+    return await smartFetch('/youtube', { type: 'latest' }, { videos: [], livestreams: [], shorts: [] });
 };
 
 export const getLatestVideos = async (maxResults = 4) => {

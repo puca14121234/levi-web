@@ -17,6 +17,10 @@
     min-width: 1000px;
 }
 
+.video-row.shorts-row {
+    grid-template-columns: repeat(5, 1fr) 120px;
+}
+
 .video-card-mini {
     background: var(--bg-secondary);
     border: 1px solid var(--border-thin);
@@ -26,6 +30,10 @@
     text-decoration: none;
     color: inherit;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.video-card-mini.is-short {
+    border-radius: 16px;
 }
 
 .video-card-mini:hover {
@@ -39,6 +47,10 @@
     aspect-ratio: 16 / 9;
     overflow: hidden;
     background: #000;
+}
+
+.video-card-mini.is-short .video-thumbnail {
+    aspect-ratio: 9 / 16;
 }
 
 .video-card-mini .video-thumbnail img {

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Play, Loader2, ArrowRight } from 'lucide-react';
 import './LatestVideos.css';
 
-const VideoRow = ({ title, fetchFn, seeMoreUrl }) => {
+const VideoRow = ({ title, fetchFn, seeMoreUrl, isShorts }) => {
     const [videos, setVideos] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -15,7 +15,7 @@ const VideoRow = ({ title, fetchFn, seeMoreUrl }) => {
                     const formattedVideos = data.map(item => ({
                         id: item.id.videoId,
                         title: item.snippet.title,
-                        thumbnail: item.snippet.thumbnails.high ? item.snippet.thumbnails.high.url : item.snippet.thumbnails.default.url,
+                        thumbnail: item.snippet.thumbnails.high ? item.snippet.thumbnails.high.url : (item.snippet.thumbnails.maxres ? item.snippet.thumbnails.maxres.url : item.snippet.thumbnails.default.url),
                         timestamp: new Date(item.snippet.publishedAt).toLocaleDateString()
                     }));
                     setVideos(formattedVideos);
@@ -49,14 +49,14 @@ const VideoRow = ({ title, fetchFn, seeMoreUrl }) => {
         <section className="section-padding container" style={{ paddingBottom: 0 }}>
             <h2 className="section-title">{title}</h2>
             <div className="row-wrapper">
-                <div className="video-row">
+                <div className={`video-row ${isShorts ? 'shorts-row' : ''}`}>
                     {videos.map((video) => (
                         <a
                             key={video.id}
-                            href={`https://www.youtube.com/watch?v=${video.id}`}
+                            href={isShorts ? `https://www.youtube.com/shorts/${video.id}` : `https://www.youtube.com/watch?v=${video.id}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="video-card-mini"
+                            className={`video-card-mini ${isShorts ? 'is-short' : ''}`}
                         >
                             <div className="video-thumbnail">
                                 <img src={video.thumbnail} alt={video.title} />

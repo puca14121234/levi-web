@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+// eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight, Play, Loader2 } from 'lucide-react';
 import { getFeaturedVideos } from '../services/youtubeService';

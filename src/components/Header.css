@@ -1,0 +1,230 @@
+.header-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: var(--header-height);
+    z-index: 1000;
+    transition: all 0.4s cubic-bezier(0.28, 0.11, 0.32, 1);
+    display: flex;
+    align-items: center;
+}
+
+.header-container.scrolled {
+    height: 56px;
+    background: var(--surface-glass);
+    box-shadow: var(--shadow-soft);
+    backdrop-filter: blur(25px);
+    -webkit-backdrop-filter: blur(25px);
+}
+
+.header-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    position: relative;
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    width: 100px;
+}
+
+.logo {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -0.06em;
+    color: var(--text-primary);
+    position: relative;
+    z-index: 1001;
+}
+
+/* Dynamic Island Pro Max */
+/* Integrated Navigation & Island */
+.header-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    flex: 1;
+}
+
+.nav-group {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+}
+
+.header-center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1001;
+    min-width: 90px;
+    /* Base width to maintain space */
+}
+
+.dynamic-island {
+    border-radius: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    color: white;
+    cursor: default;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.dynamic-island.live {
+    border: 1px solid rgba(var(--accent-gold-rgb), 0.5);
+}
+
+.island-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.live-text {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    color: var(--accent-gold);
+}
+
+.offline .island-content span {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--text-secondary);
+}
+
+/* Live Animations */
+.live-dot-wrapper {
+    position: relative;
+    width: 8px;
+    height: 8px;
+}
+
+.live-dot {
+    width: 100%;
+    height: 100%;
+    background: var(--accent-gold);
+    border-radius: 50%;
+}
+
+.live-ring {
+    position: absolute;
+    top: -4px;
+    left: -4px;
+    right: -4px;
+    bottom: -4px;
+    border: 1.5px solid var(--accent-gold);
+    border-radius: 50%;
+    animation: ripple 2s infinite cubic-bezier(0, 0, 0.2, 1);
+}
+
+@keyframes ripple {
+    0% {
+        transform: scale(0.6);
+        opacity: 1;
+    }
+
+    100% {
+        transform: scale(2.2);
+        opacity: 0;
+    }
+}
+
+/* Desktop Navigation */
+/* Right actions area to balance left logo */
+.header-right {
+    display: flex;
+    gap: 20px;
+    width: 100px;
+    /* Matched with .header-left to keep nav centered */
+    justify-content: flex-end;
+}
+
+.nav-link {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    transition: all 0.3s ease;
+    padding: 6px 10px;
+    border-radius: 8px;
+}
+
+.nav-link:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+/* Mobile Toggle */
+.mobile-toggle {
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    cursor: pointer;
+    z-index: 1001;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Mobile Menu Overlay */
+.mobile-menu-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(10px);
+    z-index: 999;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 100px;
+}
+
+.mobile-menu-content {
+    width: 90%;
+    max-width: 400px;
+    border-radius: 32px;
+    padding: 32px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+}
+
+.mobile-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.mobile-nav a {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--text-primary);
+    text-align: center;
+    padding: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.mobile-nav a:last-child {
+    border-bottom: none;
+}
+
+@media (max-width: 768px) {
+    .desktop-only {
+        display: none;
+    }
+
+    .mobile-only {
+        display: flex;
+    }
+}

@@ -95,9 +95,13 @@ const fetchLatestDirectly = async () => {
         return totalSeconds > 0 && totalSeconds < 60;
     };
 
-    const livestreams = all
+    const livestreamsActive = all
         .filter(i => i.snippet.liveBroadcastContent === 'live')
         .map(i => ({ id: { videoId: i.id }, snippet: i.snippet, isLive: true }));
+
+    const livestreamsPast = all
+        .filter(i => i.snippet.liveBroadcastContent === 'none' && !!i.liveStreamingDetails)
+        .map(i => ({ id: { videoId: i.id }, snippet: i.snippet, isLive: false }));
 
     const shorts = all
         .filter(i => isShort(i.contentDetails.duration))
@@ -106,15 +110,16 @@ const fetchLatestDirectly = async () => {
     const videos = all
         .filter(i => {
             const isStream = i.snippet.liveBroadcastContent === 'live' || i.snippet.liveBroadcastContent === 'upcoming';
-            const hasBeenStreamed = !!i.liveStreamingDetails; // Livestream đã kết thúc vẫn có details này
+            const hasBeenStreamed = !!i.liveStreamingDetails;
             const isShortVideo = isShort(i.contentDetails.duration);
             return !isStream && !hasBeenStreamed && !isShortVideo;
         })
         .map(i => ({ id: { videoId: i.id }, snippet: i.snippet, isLive: false }));
 
     return {
-        livestreams: livestreams.slice(0, 3), // Lấy tối đa 3 stream mới nhất
-        videos: videos.slice(0, 20),
+        // Ưu tiên stream đang phát, sau đó đến stream cũ để luôn đủ 3 mục nếu có thể
+        livestreams: [...livestreamsActive, ...livestreamsPast].slice(0, 3),
+        videos: videos.slice(0, 12), // Tăng số lượng video để điền đầy hàng
         shorts: shorts.slice(0, 10)
     };
 };

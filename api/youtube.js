@@ -39,16 +39,35 @@ export default async function handler(req, res) {
         const allVideos = Object.values(rawVideos).map(v => typeof v === 'string' ? JSON.parse(v) : v);
 
         // 3. Xử lý theo từng loại yêu cầu
+        const getFeaturedList = (videos) => {
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+            // Tách Livestream đang phát
+            const activeStreams = videos.filter(v => v.isLive);
+
+            // Lọc video trong 30 ngày (loại bỏ livestream đang phát để sắp xếp sau)
+            const recentVideos = videos.filter(v => {
+                const pubDate = new Date(v.snippet.publishedAt);
+                return !v.isShort && !v.isLive && pubDate >= thirtyDaysAgo;
+            });
+
+            // Sắp xếp theo view
+            const sortedRecent = recentVideos.sort((a, b) =>
+                (parseInt(b.statistics?.viewCount || 0)) - (parseInt(a.statistics?.viewCount || 0))
+            );
+
+            // Kết hợp: Stream đang phát luôn ở đầu (nếu có), sau đó là top video theo view
+            return [...activeStreams, ...sortedRecent].slice(0, 5);
+        };
+
         if (type === 'latest') {
             const result = categorizeVideos(allVideos);
             return res.status(200).json(result);
         }
 
         if (type === 'featured') {
-            const featured = allVideos
-                .filter(v => !v.isShort) // Ưu tiên video dài làm featured
-                .sort((a, b) => (parseInt(b.statistics?.viewCount || 0)) - (parseInt(a.statistics?.viewCount || 0)))
-                .slice(0, 5);
+            const featured = getFeaturedList(allVideos);
             return res.status(200).json(featured);
         }
 
@@ -64,15 +83,9 @@ export default async function handler(req, res) {
         }
 
         // Mặc định: Trả về Bundle (cho App initialization)
-        const latest = categorizeVideos(allVideos);
-        const featured = allVideos
-            .filter(v => !v.isShort)
-            .sort((a, b) => (parseInt(b.statistics?.viewCount || 0)) - (parseInt(a.statistics?.viewCount || 0)))
-            .slice(0, 5);
-
         return res.status(200).json({
-            featured,
-            latest,
+            featured: getFeaturedList(allVideos),
+            latest: categorizeVideos(allVideos),
             playlists: await fetchPlaylistsFromYT()
         });
 

@@ -107,7 +107,7 @@ export const getFeaturedVideos = async (_maxResults = 5) => {
 };
 
 export const getPlaylistVideos = async (playlistId, maxResults = 5) => {
-    const data = await smartFetch('/playlistItems', { playlistId, part: 'snippet', maxResults }, { items: MOCK_FEATURED });
+    const data = await smartFetch('/youtube', { type: 'playlistItems', playlistId, maxResults }, MOCK_FEATURED);
     return data.items || data;
 };
 

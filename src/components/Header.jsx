@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import { Youtube, Facebook, Video, Radio, Menu, X, ExternalLink } from 'lucide-react';
 import { getCategorizedLatestContent } from '../services/youtubeService';
 import './Header.css';

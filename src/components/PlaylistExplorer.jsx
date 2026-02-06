@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Play, ListVideo, Loader2 } from 'lucide-react';
-import { getPlaylists } from '../services/youtubeService';
+import { getPlaylists, getPlaylistVideos } from '../services/youtubeService';
 import './PlaylistExplorer.css';
 
 const PlaylistExplorer = () => {
@@ -37,15 +37,15 @@ const PlaylistExplorer = () => {
 
     useEffect(() => {
         if (!activeTab) return;
+        const { getPlaylistVideos } = require('../services/youtubeService'); // Use commonjs or top level import
 
         const fetchVideos = async () => {
             setLoadingVideos(true);
             try {
-                const { getPlaylistVideos } = await import('../services/youtubeService');
                 const data = await getPlaylistVideos(activeTab, 3);
-                if (data) {
+                if (data && Array.isArray(data)) {
                     const formatted = data.map(item => ({
-                        id: item.snippet.resourceId.videoId,
+                        id: item.snippet.resourceId?.videoId || item.contentDetails?.videoId,
                         title: item.snippet.title,
                         thumbnail: item.snippet.thumbnails.high ? item.snippet.thumbnails.high.url : item.snippet.thumbnails.default.url,
                         timestamp: new Date(item.snippet.publishedAt).toLocaleDateString()

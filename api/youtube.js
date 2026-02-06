@@ -50,6 +50,9 @@ export default async function handler(req, res) {
             dataToCache = await fetchFeaturedFromYT()
         } else if (type === 'playlists') {
             dataToCache = await fetchPlaylistsFromYT()
+        } else if (type === 'playlistItems') {
+            const { playlistId, maxResults } = req.query
+            dataToCache = await fetchPlaylistItemsFromYT(playlistId, maxResults)
         } else if (type === 'latest') {
             dataToCache = await fetchLatestFromYT()
         } else {

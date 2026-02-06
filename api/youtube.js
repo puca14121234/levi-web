@@ -15,197 +15,191 @@ const youtubeApi = axios.create({
     params: { key: API_KEY },
 })
 
+const VIDEO_DB_KEY = 'yt_video_db_v1';
+const LAST_SYNC_KEY = 'yt_last_sync_v1';
+const SYNC_LOCK_KEY = 'yt_sync_lock';
+
 export default async function handler(req, res) {
-    // CORS configuration
-    res.setHeader('Access-Control-Allow-Credentials', true)
-    res.setHeader('Access-Control-Allow-Origin', '*')
-    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT')
-    res.setHeader(
-        'Access-Control-Allow-Headers',
-        'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
-    )
+    // CORS
+    res.setHeader('Access-Control-Allow-Credentials', true);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+    res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
 
-    if (req.method === 'OPTIONS') {
-        res.status(200).end()
-        return
-    }
+    if (req.method === 'OPTIONS') return res.status(200).end();
 
-    const { type } = req.query
+    const { type } = req.query;
 
     try {
-        // 1. Kiểm tra Cache trong Redis
-        const cacheKey = `yt_data_${type || 'all'}_v2`
-        const cachedData = await redis.get(cacheKey)
+        // 1. Kiểm tra và thực hiện Đồng bộ dữ liệu (Incremental hoặc Deep)
+        await ensureDataSynced();
 
-        if (cachedData) {
-            console.log(`[Proxy] Returning Cached Data for: ${type || 'all'}`)
-            return res.status(200).json(cachedData)
+        // 2. Lấy dữ liệu từ Redis DB
+        const rawVideos = await redis.hgetall(VIDEO_DB_KEY) || {};
+        const allVideos = Object.values(rawVideos).map(v => typeof v === 'string' ? JSON.parse(v) : v);
+
+        // 3. Xử lý theo từng loại yêu cầu
+        if (type === 'latest') {
+            const result = categorizeVideos(allVideos);
+            return res.status(200).json(result);
         }
-
-        // 2. Nếu không có cache, thực hiện fetch từ YouTube (Chỉ 1 server gọi)
-        console.log(`[Proxy] Cache Miss. Fetching from YouTube API for: ${type || 'all'}`)
-        let dataToCache = null
 
         if (type === 'featured') {
-            dataToCache = await fetchFeaturedFromYT()
-        } else if (type === 'playlists') {
-            dataToCache = await fetchPlaylistsFromYT()
-        } else if (type === 'playlistItems') {
-            const { playlistId, maxResults } = req.query
-            dataToCache = await fetchPlaylistItemsFromYT(playlistId, maxResults)
-        } else if (type === 'latest') {
-            dataToCache = await fetchLatestFromYT()
-        } else {
-            // Mặc định lấy cả bundle để giảm số lần gọi
-            dataToCache = {
-                featured: await fetchFeaturedFromYT(),
-                latest: await fetchLatestFromYT(),
-                playlists: await fetchPlaylistsFromYT()
-            }
+            const featured = allVideos
+                .filter(v => !v.isShort) // Ưu tiên video dài làm featured
+                .sort((a, b) => (parseInt(b.statistics?.viewCount || 0)) - (parseInt(a.statistics?.viewCount || 0)))
+                .slice(0, 5);
+            return res.status(200).json(featured);
         }
 
-        // 3. Lưu vào Redis với TTL 10 phút (600s)
-        await redis.set(cacheKey, dataToCache, { ex: 600 })
+        if (type === 'playlists') {
+            const data = await fetchPlaylistsFromYT();
+            return res.status(200).json(data);
+        }
 
-        return res.status(200).json(dataToCache)
+        if (type === 'playlistItems') {
+            const { playlistId, maxResults } = req.query;
+            const data = await fetchPlaylistItemsFromYT(playlistId, maxResults);
+            return res.status(200).json(data);
+        }
+
+        // Mặc định: Trả về Bundle (cho App initialization)
+        const latest = categorizeVideos(allVideos);
+        const featured = allVideos
+            .filter(v => !v.isShort)
+            .sort((a, b) => (parseInt(b.statistics?.viewCount || 0)) - (parseInt(a.statistics?.viewCount || 0)))
+            .slice(0, 5);
+
+        return res.status(200).json({
+            featured,
+            latest,
+            playlists: await fetchPlaylistsFromYT()
+        });
+
     } catch (error) {
-        console.error('[Proxy Error]:', error.message)
-        res.status(500).json({ error: 'Failed to fetch YouTube data', message: error.message })
+        console.error('[YouTube API Error]:', error.message);
+        res.status(500).json({ error: 'Sync Failed', message: error.message });
     }
 }
 
-// --- Helper Functions (Logic bê từ youtubeService.js sang) ---
+// --- CORE SYNC LOGIC ---
 
-async function fetchFeaturedFromYT() {
-    // 1. Kiểm tra xem có Livestream nào đang hoạt động không
-    const latest = await fetchLatestFromYT()
-    const activeStream = latest.livestreams.length > 0 ? latest.livestreams[0] : null
+async function ensureDataSynced() {
+    const lastSync = await redis.get(LAST_SYNC_KEY);
+    const now = Date.now();
 
-    // 2. Lấy danh sách video gần đây để chọn video nhiều view
-    const response = await youtubeApi.get('/playlistItems', {
-        params: {
-            playlistId: UPLOADS_PLAYLIST_ID,
-            part: 'snippet,contentDetails',
-            maxResults: 50
+    // Nếu chưa bao giờ sync hoặc quá 10 phút chưa sync 50 video mới nhất
+    if (!lastSync || (now - lastSync) > 600000) {
+        // Sử dụng Lock để tránh nhiều request cùng sync một lúc
+        const lock = await redis.set(SYNC_LOCK_KEY, 'locked', { nx: true, ex: 60 });
+        if (lock) {
+            console.log('[Sync] Starting Incremental/First Sync...');
+            await performSync(!lastSync); // deepSync = true nếu chưa bao giờ sync
+            await redis.set(LAST_SYNC_KEY, now);
+            await redis.del(SYNC_LOCK_KEY);
         }
-    })
-
-    const items = response.data.items || []
-    if (items.length === 0) return activeStream ? [activeStream] : []
-
-    const videoIds = items.map(item => item.contentDetails.videoId).join(',')
-
-    // 3. Lấy statistics cho các video
-    const statsResponse = await youtubeApi.get('/videos', {
-        params: {
-            id: videoIds,
-            part: 'snippet,statistics'
-        }
-    })
-
-    const topVideos = statsResponse.data.items
-        .sort((a, b) => parseInt(b.statistics.viewCount) - parseInt(a.statistics.viewCount))
-        .map(item => ({
-            id: { videoId: item.id },
-            snippet: item.snippet,
-            statistics: item.statistics,
-            isLive: item.snippet.liveBroadcastContent === 'live'
-        }))
-
-    // 4. Kết hợp: Livestream luôn đứng đầu, sau đó là các video hot nhất (loại bỏ video trùng nếu đang live)
-    let finalFeatured = []
-    if (activeStream) {
-        finalFeatured.push({ ...activeStream, isLive: true })
     }
-
-    // Thêm các video hot, tránh trùng với video đang live
-    topVideos.forEach(v => {
-        if (finalFeatured.length < 5 && (!activeStream || v.id.videoId !== activeStream.id.videoId)) {
-            finalFeatured.push(v)
-        }
-    })
-
-    return finalFeatured
 }
 
-async function fetchPlaylistsFromYT() {
-    const response = await youtubeApi.get('/playlists', {
-        params: {
-            channelId: CHANNEL_ID,
-            part: 'snippet,contentDetails',
-            maxResults: 10
+async function performSync(isDeep = false) {
+    let pageToken = '';
+    const dateLimit = new Date();
+    dateLimit.setDate(dateLimit.getDate() - 60); // 60 ngày
+
+    let syncedCount = 0;
+    const maxPages = isDeep ? 5 : 1; // Deep sync quét 5 trang (250 video), Incremental quét 1 trang (50 video)
+
+    for (let p = 0; p < maxPages; p++) {
+        const res = await youtubeApi.get('/playlistItems', {
+            params: {
+                playlistId: UPLOADS_PLAYLIST_ID,
+                part: 'snippet,contentDetails',
+                maxResults: 50,
+                pageToken
+            }
+        });
+
+        const items = res.data.items || [];
+        if (items.length === 0) break;
+
+        const videoIds = items.map(i => i.contentDetails.videoId).join(',');
+        const details = await youtubeApi.get('/videos', {
+            params: { id: videoIds, part: 'snippet,contentDetails,liveStreamingDetails,statistics' }
+        });
+
+        const videos = details.data.items;
+        for (const v of videos) {
+            const publishedAt = new Date(v.snippet.publishedAt);
+            if (!isDeep && publishedAt < dateLimit) continue; // Skip nếu video quá cũ trong bản incremental
+
+            const duration = v.contentDetails.duration;
+            const isShort = checkIsShort(duration);
+
+            const videoData = {
+                id: { videoId: v.id },
+                snippet: v.snippet,
+                contentDetails: v.contentDetails,
+                liveStreamingDetails: v.liveStreamingDetails,
+                statistics: v.statistics,
+                isShort,
+                isLive: v.snippet.liveBroadcastContent === 'live',
+                updatedAt: Date.now()
+            };
+
+            await redis.hset(VIDEO_DB_KEY, { [v.id]: videoData });
+            syncedCount++;
         }
-    })
-    return response.data.items || []
+
+        pageToken = res.data.nextPageToken;
+        if (!pageToken || (!isDeep && syncedCount >= 50)) break;
+    }
+    console.log(`[Sync] Completed. ${isDeep ? 'Deep' : 'Incremental'} sync processed ${syncedCount} videos.`);
 }
 
-async function fetchLatestFromYT() {
-    const response = await youtubeApi.get('/activities', {
-        params: {
-            channelId: CHANNEL_ID,
-            part: 'snippet,contentDetails',
-            maxResults: 50
-        }
-    })
+// --- HELPERS ---
 
-    const uploads = response.data.items.filter(item => item.snippet.type === 'upload')
-    if (uploads.length === 0) return { videos: [], livestreams: [], shorts: [] }
+function checkIsShort(duration) {
+    const match = duration.match(/PT(\d+H)?(\d+M)?(\d+S)?/);
+    if (!match) return false;
+    const hours = parseInt(match[1]) || 0;
+    const minutes = parseInt(match[2]) || 0;
+    const seconds = parseInt(match[3]) || 0;
+    const totalSeconds = hours * 3600 + minutes * 60 + seconds;
+    return totalSeconds > 0 && totalSeconds <= 60;
+}
 
-    const videoIds = uploads.map(item => item.contentDetails.upload.videoId).join(',')
-    const detailsResponse = await youtubeApi.get('/videos', {
-        params: {
-            id: videoIds,
-            part: 'snippet,contentDetails,liveStreamingDetails'
-        }
-    })
+function categorizeVideos(allVideos) {
+    // Sắp xếp video theo thời gian mới nhất
+    const sorted = allVideos.sort((a, b) => new Date(b.snippet.publishedAt) - new Date(a.snippet.publishedAt));
 
-    const allItems = detailsResponse.data.items
+    const livestreamsActive = sorted.filter(v => v.isLive);
+    const livestreamsPast = sorted.filter(v => !v.isLive && !!v.liveStreamingDetails);
 
-    const isShort = (duration) => {
-        const match = duration.match(/PT(\d+H)?(\d+M)?(\d+S)?/)
-        if (!match) return false
-        const hours = parseInt(match[1]) || 0
-        const minutes = parseInt(match[2]) || 0
-        const seconds = parseInt(match[3]) || 0
-        const totalSeconds = hours * 3600 + minutes * 60 + seconds
-        return totalSeconds > 0 && totalSeconds < 60
-    }
+    const shorts = sorted.filter(v => v.isShort);
 
-    const livestreamsActive = allItems
-        .filter(i => i.snippet.liveBroadcastContent === 'live')
-        .map(i => ({ id: { videoId: i.id }, snippet: i.snippet, isLive: true }))
-
-    const livestreamsPast = allItems
-        .filter(i => i.snippet.liveBroadcastContent === 'none' && !!i.liveStreamingDetails)
-        .map(i => ({ id: { videoId: i.id }, snippet: i.snippet, isLive: false }))
-
-    const shorts = allItems
-        .filter(i => isShort(i.contentDetails.duration))
-        .map(i => ({ id: { videoId: i.id }, snippet: i.snippet, isShort: true }))
-
-    const videos = allItems
-        .filter(i => {
-            const isStream = i.snippet.liveBroadcastContent === 'live' || i.snippet.liveBroadcastContent === 'upcoming'
-            const hasBeenStreamed = !!i.liveStreamingDetails
-            const isShortVideo = isShort(i.contentDetails.duration)
-            return !isStream && !hasBeenStreamed && !isShortVideo
-        })
-        .map(i => ({ id: { videoId: i.id }, snippet: i.snippet, isLive: false }))
+    const videos = sorted.filter(v => {
+        const isStream = v.isLive || v.snippet.liveBroadcastContent === 'upcoming';
+        const hasBeenStreamed = !!v.liveStreamingDetails;
+        return !isStream && !hasBeenStreamed && !v.isShort;
+    });
 
     return {
         livestreams: [...livestreamsActive, ...livestreamsPast].slice(0, 3),
         videos: videos.slice(0, 12),
         shorts: shorts.slice(0, 10)
-    }
+    };
+}
+
+async function fetchPlaylistsFromYT() {
+    const response = await youtubeApi.get('/playlists', {
+        params: { channelId: CHANNEL_ID, part: 'snippet,contentDetails', maxResults: 10 }
+    });
+    return response.data.items || [];
 }
 
 async function fetchPlaylistItemsFromYT(playlistId, maxResults = 10) {
     const response = await youtubeApi.get('/playlistItems', {
-        params: {
-            playlistId,
-            part: 'snippet,contentDetails',
-            maxResults
-        }
-    })
-    return response.data.items || []
+        params: { playlistId, part: 'snippet,contentDetails', maxResults }
+    });
+    return response.data.items || [];
 }

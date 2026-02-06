@@ -61,8 +61,8 @@ export default async function handler(req, res) {
             }
         }
 
-        // 3. Lưu vào Redis với TTL 1 giờ (3600s)
-        await redis.set(cacheKey, dataToCache, { ex: 3600 })
+        // 3. Lưu vào Redis với TTL 10 phút (600s)
+        await redis.set(cacheKey, dataToCache, { ex: 600 })
 
         return res.status(200).json(dataToCache)
     } catch (error) {

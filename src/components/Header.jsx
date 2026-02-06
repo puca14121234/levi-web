@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Youtube, Facebook, Video, Radio, Menu, X, ExternalLink } from 'lucide-react';
+import { getCategorizedLatestContent } from '../services/youtubeService';
 import './Header.css';
 
 const Header = () => {
@@ -8,14 +9,19 @@ const Header = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Mock checking live status - In real app, this would be an API call
+  // Tự động nhận diện trạng thái Live từ API thực tế
   useEffect(() => {
-    const checkLive = () => {
-      // Levi is usually live on specific times, for now we randomize for demo
-      setIsLive(Math.random() > 0.4);
+    const checkLive = async () => {
+      try {
+        const data = await getCategorizedLatestContent(1);
+        setIsLive(data.livestreams && data.livestreams.length > 0);
+      } catch (error) {
+        console.error("Failed to check live status:", error);
+        setIsLive(false);
+      }
     };
     checkLive();
-    const interval = setInterval(checkLive, 60000);
+    const interval = setInterval(checkLive, 300000); // Check every 5 mins
     return () => clearInterval(interval);
   }, []);
 
@@ -51,7 +57,10 @@ const Header = () => {
           </div>
 
           <div className="header-center">
-            <motion.div
+            <motion.a
+              href={isLive ? "https://www.youtube.com/@Levi97/live" : "#featured"}
+              target={isLive ? "_blank" : "_self"}
+              rel={isLive ? "noopener noreferrer" : ""}
               className={`dynamic-island ${isLive ? 'live' : 'offline'}`}
               initial={false}
               animate={{
@@ -68,6 +77,8 @@ const Header = () => {
                 damping: 30,
                 mass: 1
               }}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
             >
               <AnimatePresence mode="wait">
                 {isLive ? (
@@ -97,7 +108,7 @@ const Header = () => {
                   </motion.div>
                 )}
               </AnimatePresence>
-            </motion.div>
+            </motion.a>
           </div>
 
           <div className="nav-group right desktop-only">

@@ -74,7 +74,11 @@ export default async function handler(req, res) {
 // --- Helper Functions (Logic bê từ youtubeService.js sang) ---
 
 async function fetchFeaturedFromYT() {
-    // Lấy danh sách video gần đây
+    // 1. Kiểm tra xem có Livestream nào đang hoạt động không
+    const latest = await fetchLatestFromYT()
+    const activeStream = latest.livestreams.length > 0 ? latest.livestreams[0] : null
+
+    // 2. Lấy danh sách video gần đây để chọn video nhiều view
     const response = await youtubeApi.get('/playlistItems', {
         params: {
             playlistId: UPLOADS_PLAYLIST_ID,
@@ -84,11 +88,11 @@ async function fetchFeaturedFromYT() {
     })
 
     const items = response.data.items || []
-    if (items.length === 0) return []
+    if (items.length === 0) return activeStream ? [activeStream] : []
 
     const videoIds = items.map(item => item.contentDetails.videoId).join(',')
 
-    // Lấy statistics
+    // 3. Lấy statistics cho các video
     const statsResponse = await youtubeApi.get('/videos', {
         params: {
             id: videoIds,
@@ -96,14 +100,29 @@ async function fetchFeaturedFromYT() {
         }
     })
 
-    return statsResponse.data.items
+    const topVideos = statsResponse.data.items
         .sort((a, b) => parseInt(b.statistics.viewCount) - parseInt(a.statistics.viewCount))
-        .slice(0, 5)
         .map(item => ({
             id: { videoId: item.id },
             snippet: item.snippet,
-            statistics: item.statistics
+            statistics: item.statistics,
+            isLive: false
         }))
+
+    // 4. Kết hợp: Livestream luôn đứng đầu, sau đó là các video hot nhất (loại bỏ video trùng nếu đang live)
+    let finalFeatured = []
+    if (activeStream) {
+        finalFeatured.push({ ...activeStream, isLive: true })
+    }
+
+    // Thêm các video hot, tránh trùng với video đang live
+    topVideos.forEach(v => {
+        if (finalFeatured.length < 5 && (!activeStream || v.id.videoId !== activeStream.id.videoId)) {
+            finalFeatured.push(v)
+        }
+    })
+
+    return finalFeatured
 }
 
 async function fetchPlaylistsFromYT() {

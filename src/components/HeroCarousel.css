@@ -64,6 +64,27 @@
     max-width: 900px;
 }
 
+.category-tag.live {
+    background: #ff0000;
+    color: white;
+    font-weight: 800;
+    animation: blink 1.5s infinite;
+}
+
+@keyframes blink {
+    0% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
+
+    100% {
+        opacity: 1;
+    }
+}
+
 .category-tag {
     display: inline-block;
     padding: 8px 16px;
@@ -86,6 +107,7 @@
     letter-spacing: -0.04em;
     background: linear-gradient(180deg, #fff 0%, #d1d1d6 100%);
     -webkit-background-clip: text;
+    background-clip: text;
     -webkit-text-fill-color: transparent;
 }
 

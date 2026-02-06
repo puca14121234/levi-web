@@ -19,7 +19,8 @@ const HeroCarousel = () => {
                         id: item.id.videoId,
                         title: item.snippet.title,
                         thumbnail: item.snippet.thumbnails.maxres ? item.snippet.thumbnails.maxres.url : item.snippet.thumbnails.high.url,
-                        category: ""
+                        category: item.isLive ? "LIVE" : "",
+                        isLive: item.isLive
                     })));
                 }
             } catch (error) {
@@ -65,7 +66,7 @@ const HeroCarousel = () => {
                         </div>
 
                         <div className="slide-content">
-                            <span className="category-tag">{current.category}</span>
+                            <span className={`category-tag ${current.isLive ? 'live' : ''}`}>{current.category}</span>
                             <h1 className="slide-title" dangerouslySetInnerHTML={{ __html: current.title }}></h1>
                             <a
                                 href={`https://www.youtube.com/watch?v=${current.id}`}

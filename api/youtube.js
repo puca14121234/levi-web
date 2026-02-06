@@ -106,7 +106,7 @@ async function fetchFeaturedFromYT() {
             id: { videoId: item.id },
             snippet: item.snippet,
             statistics: item.statistics,
-            isLive: false
+            isLive: item.snippet.liveBroadcastContent === 'live'
         }))
 
     // 4. Kết hợp: Livestream luôn đứng đầu, sau đó là các video hot nhất (loại bỏ video trùng nếu đang live)
@@ -158,7 +158,14 @@ async function fetchLatestFromYT() {
 
     const allItems = detailsResponse.data.items
     return {
-        livestreams: allItems.filter(item => item.liveStreamingDetails).map(item => ({ id: { videoId: item.id }, snippet: item.snippet })),
-        videos: allItems.filter(item => !item.liveStreamingDetails).map(item => ({ id: { videoId: item.id }, snippet: item.snippet }))
+        // Chỉ lấy những video thực sự đang LIVE
+        livestreams: allItems
+            .filter(item => item.snippet.liveBroadcastContent === 'live')
+            .map(item => ({ id: { videoId: item.id }, snippet: item.snippet, isLive: true })),
+
+        // Videos thường (không bao gồm scheduled/upcoming streams)
+        videos: allItems
+            .filter(item => item.snippet.liveBroadcastContent !== 'live' && item.snippet.liveBroadcastContent !== 'upcoming')
+            .map(item => ({ id: { videoId: item.id }, snippet: item.snippet, isLive: false }))
     }
 }

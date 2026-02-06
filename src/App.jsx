@@ -54,7 +54,7 @@ function App() {
         <Reveal>
           <VideoRow
             title="Livestream mới nhất"
-            fetchFn={async () => categorizedContent.livestreams}
+            fetchFn={async () => categorizedContent.livestreams.slice(0, 3)}
             seeMoreUrl="https://www.youtube.com/@Levi97/streams"
           />
         </Reveal>
@@ -63,7 +63,7 @@ function App() {
         <Reveal>
           <VideoRow
             title="Video mới nhất"
-            fetchFn={async () => categorizedContent.videos}
+            fetchFn={async () => categorizedContent.videos.slice(0, 3)}
             seeMoreUrl="https://www.youtube.com/@Levi97/videos"
           />
         </Reveal>
